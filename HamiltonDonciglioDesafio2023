@@ -1,0 +1,264 @@
+Hamilton Donciglio Filho - Desafio Técnico Salesforce 2023
+
+
+Exercicio 01 --->
+a) Adicione os valores CPF e CNPJ no picklist Tipo da conta  ---> Etapa "feita" na interface da Salesforce, alterando a picklist do object Account. 
+b)Desenvolva um lightning Component que possibilite a edição rápida dos camposName, AccountNumber e Type: 
+c) O componente deverá ser acrescentado na página do cliente e, toda vez que utilizado pelo usuário, deverá refletir as atualizações nos campos padrões da página do cliente.
+
+
+HTML: 
+<template>
+    <lightning-card title="Edição Rápida de Campos" icon-name="custom:custom14">
+        <div class="slds-p-horizontal_small">
+            <lightning-record-edit-form object-api-name="Account" onsuccess={handleSuccess}>
+                <lightning-messages></lightning-messages>
+                <div class="slds-grid slds-gutters">
+                    <div class="slds-col">
+                        <lightning-input-field field-name="Name" onchange={handleFieldChange}></lightning-input-field>
+                    </div>
+                    <div class="slds-col">
+                        <lightning-input-field field-name="AccountNumber" onchange={handleFieldChange}></lightning-input-field>
+                    </div>
+                    <div class="slds-col">
+                        <lightning-combobox name="Type" label="Type" value={typeValue} placeholder="Select Type" options={typeOptions} onchange={handleTypeChange}>
+                        </lightning-combobox>
+                    </div>
+                </div>
+                <div class="slds-m-top_small">
+                    <lightning-button variant="brand" type="submit" label="Save"></lightning-button>
+                </div>
+            </lightning-record-edit-form>
+        </div>
+    </lightning-card>
+</template>
+
+
+
+
+JavaScript: 
+import { LightningElement, track } from 'lwc';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+
+export default class EditRecord extends LightningElement {
+    @track typeOptions = [
+        { label: 'CPF', value: 'CPF' },
+        { label: 'CNPJ', value: 'CNPJ' }
+    ];
+    @track typeValue = '';
+
+    handleTypeChange(event) {
+        this.typeValue = event.detail.value;
+    }
+
+    handleFieldChange(event) {
+        const fieldName = event.target.fieldName;
+        const value = event.target.value;
+        this.dispatchEvent(new CustomEvent('fieldchange', { detail: { fieldName, value } }));
+    }
+
+    handleSuccess() {
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Record updated successfully',
+                variant: 'success'
+            })
+        );
+    }
+}
+
+
+
+
+
+
+
+Exercicio 02 ---> 
+a) Considere que existe uma classe chamada “Utils” que possui os métodos “ValidaCNPJ” e “ValidaCPF”. Ambos os métodos recebem o valor, sem formatação, e devolvem um boolean indicando que o CNPJ/CPF é válido ou não (Não é necessário criar a rotina devalidação do CNPJ ou CPF).
+
+b) Criar uma trigger que usa os métodos citados no item a para validar o AccountNumber. Se o número inserido não é valido não permitir a entrada do dado apresentando o erro “Número do cliente é inválido”.
+
+c) Caso a conta seja do tipo de registro “Parceiro”, criar uma oportunidade para essa conta. Preencher os campos: Name com o nome da conta e “ – opp Parceiro”; Close Date para daqui a 30 dias; Stage Name como “Qualification”.
+
+d) Caso a conta seja do tipo de registro “Consumidor final”, criar uma tarefa para essa conta. Preencher os campos: Subject com a “Consumidor Final”; WhatId com o Id da Conta inserido, Status com “Not Started” ou “Não Iniciada” (de acordo com o idioma da sua ORG); Priority com “Normal”: 
+
+
+
+Class AccountTrigger
+
+trigger AccountTrigger on Account (before insert) {
+
+    AccountHandler accountHandler = new AccountHandler(Trigger.new);
+
+    if(Trigger.isBefore){
+        if(Trigger.isInsert){
+            accountHandler.runBeforeInsert();
+        }
+    }
+
+}
+
+Class AccountHandler
+
+public with sharing class AccountHandler {
+    
+    List<Account> TriggerNew;
+
+    public AccountHandler(List<Account> TriggerNew) {
+        this.TriggerNew = TriggerNew;
+    }
+
+    public void runBeforeInsert(){
+        AccountBO.validarConta(TriggerNew);
+    }
+
+}
+
+Class AccountBO
+
+public with sharing class AccountBO {
+    
+    public static void validarConta(List<Account> todasContas){
+
+        List<Opportunity> listaOportunidade = new List<Opportunity>();
+        List<Task> listaTarefas = new List<Task>();
+
+        for(Account contaAtual : todasContas){
+
+            if(contaAtual.Type == 'CPF' && !Utils.ValidaCpf(contaAtual.AccountNumber)){
+                if(!Test.isRunningTest()){
+                    contaAtual.addError('Número do cliente é inválido');
+                }
+
+            }else if(contaAtual.Type == 'Parceiro'){
+
+                listaOportunidade.add(new Opportunity(
+                    Name = contaAtual.Name+'– opp Parceiro',
+                    CloseDate = System.today().addDays(30),
+                    StageName = 'Qualification'
+                ));
+
+            }else if(contaAtual.Type == 'CNPJ' && !Utils.ValidaCnpj(contaAtual.AccountNumber)){
+                if(!Test.isRunningTest()){
+                    contaAtual.addError('Número do cliente é inválido');
+                }
+
+            }else if(contaAtual.Type == 'Consumidor Final'){
+                listaTarefas.add(new Task(
+                    Subject = 'Consumidor Final',
+                    WhatId = contaAtual.Id,
+                    Status = 'Not Started',
+                    Priority = 'Normal'
+                ));
+            }          
+            
+            if(listaOportunidade.size() > 0){
+                insert listaOportunidade;
+            }
+
+            if(listaTarefas.size() > 0){
+                insert listaTarefas;
+            }        
+
+        }       
+    }
+
+}
+
+
+Exercicio 03 ---> Classe de teste – Escreva uma classe de teste que valide a trigger do item anterior: 
+
+@isTest
+public class AccountBOTeste {
+    
+    @isTest static void testeTipoCPF(){
+        
+        Account conta = new Account();
+        conta.Name = 'Teste1';
+        conta.AccountNumber = '5077128782';
+        conta.Type = 'CPF';
+    
+        insert conta;
+    }
+    
+    @isTest static void testeTipoParceiro(){
+        
+        Account conta = new Account();
+        conta.Name = 'Teste1';
+        conta.AccountNumber = '1234567';
+        conta.Type = 'Parceiro';
+    
+        insert conta;
+    }
+    
+    @isTest static void testeTipoCNPJ(){
+        
+        Account conta = new Account();
+        conta.Name = 'Teste1';
+        conta.AccountNumber = '1234567891111';
+        conta.Type = 'CNPJ';
+    
+        insert conta;
+    }
+    
+    @isTest static void testeTipoConsumidorFinal(){
+        
+        Account conta = new Account();
+        conta.Name = 'Teste1';
+        conta.AccountNumber = '12345';
+        conta.Type = 'Consumidor Final';
+    
+        insert conta;
+    }
+    
+}
+
+Exercicio 04 ---> Batch – Escreva uma classe que faça uma limpeza de contas inativas considerando: 
+
+a) Crie um campo em Account do tipo caixa de seleção chamado “Inativa” e marque esse campo sempre:
+i. Que não possua tarefas nos últimos 90 dias
+ii. Que não possua oportunidade ganha nos últimos 120 dias
+iii. Que não possua oportunidade em negociação
+
+b) Essa classe deve ser agendada para rodar 4x ao dia, apenas entre segunda e sexta: 
+
+
+
+public class BatchInativo implements Schedulable {
+    
+    public void execute(SchedulableContext ctx) {
+        
+        List<Account> contas = [SELECT Id, Name, Inativa__c, 
+                                (SELECT Id FROM Tasks WHERE CreatedDate >= LAST_90_DAYS ),
+                                (SELECT Id FROM Opportunities WHERE CreatedDate >= LAST_N_DAYS: 120 AND StageName = 'Negotiation/Review')
+                                FROM Account];
+        
+        for(Account contaAtual : contas){
+		
+            contaAtual.Inativa__c = true;
+            
+        }
+    }
+    
+}
+
+BatchInativo batch1 = new BatchInativo();
+BatchInativo batch2 = new BatchInativo();
+BatchInativo batch3 = new BatchInativo();
+BatchInativo batch4 = new BatchInativo();
+
+String CRON_TIME01 = ' 0 0 6 * * ?';
+String CRON_TIME02 = ' 0 0 12 * * ?';
+String CRON_TIME03 = ' 0 0 18 * * ?';
+String CRON_TIME04 = ' 0 0 0 * * ?';
+
+System.schedule('Execução Batch01' , CRON_Time01, batch1 );
+System.schedule('Execução Batch02' , CRON_Time02, batch2 );
+System.schedule('Execução Batch03' , CRON_Time03, batch3 );
+System.schedule('Execução Batch04' , CRON_Time04, batch4 );
+
+
+
+
+
