@@ -84,6 +84,7 @@ c) Caso a conta seja do tipo de registro “Parceiro”, criar uma oportunidade 
 d) Caso a conta seja do tipo de registro “Consumidor final”, criar uma tarefa para essa conta. Preencher os campos: Subject com a “Consumidor Final”; WhatId com o Id da Conta inserido, Status com “Not Started” ou “Não Iniciada” (de acordo com o idioma da sua ORG); Priority com “Normal”: 
 
 
+**** A Classe Utils não foi criada, portanto em um possivel teste real, a referencia a essa classe resultaria em erros. 
 
 Class AccountTrigger
 
